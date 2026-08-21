@@ -32,16 +32,13 @@ function parse(source) {
 }
 function parseNumber(value){const m=String(value).trim().match(/^(-?(?:\d+(?:\.\d+)?|\.\d+))([a-zA-Z%]*)$/);return m?{n:Number(m[1]),unit:m[2]}:null;}
 function valueOf(value,env){
-  let v=String(value);
-  const variables=[];
+  let v=String(value); const variables=[];
   v=v.replace(/var\(\s*([A-Za-z_][\w-]*)\s*\)/g,(_,name)=>{const key=`__STYL_VAR_${variables.length}__`;variables.push(`var(--${name})`);return key;});
   v=v.replace(/\b([A-Za-z_][\w-]*)\b/g,n=>Object.prototype.hasOwnProperty.call(env,n)?env[n]:n);
   variables.forEach((replacement,index)=>{v=v.replaceAll(`__STYL_VAR_${index}__`,replacement);});
-  if(/^var\(--[A-Za-z_][\w-]*\)$/.test(v.trim()))return v.trim();
-  const parts=v.match(/^(.+?)\s+([+*/-])\s+(.+)$/);
-  if(!parts)return v;
-  const[,left,op,right]=parts,a=parseNumber(left),b=parseNumber(right);
-  if(!a||!b)return`calc(${left.trim()} ${op} ${right.trim()})`;
+  const trimmed=v.trim(); if(/^var\(--[A-Za-z_][\w-]*\)$/.test(trimmed)) return trimmed;
+  const parts=v.match(/^(.+?)\s+([+*/-])\s+(.+)$/); if(!parts)return v;
+  const[,left,op,right]=parts,a=parseNumber(left),b=parseNumber(right); if(!a||!b)return`calc(${left.trim()} ${op} ${right.trim()})`;
   if(op==='+')return a.unit===b.unit?`${a.n+b.n}${a.unit}`:`calc(${left.trim()} + ${right.trim()})`;
   if(op==='-')return a.unit===b.unit?`${a.n-b.n}${a.unit}`:`calc(${left.trim()} - ${right.trim()})`;
   if(op==='*'){if(a.unit&&b.unit)return`calc(${left.trim()} * ${right.trim()})`;return`${a.n*b.n}${a.unit||b.unit}`;}
@@ -50,22 +47,10 @@ function valueOf(value,env){
 function interpolate(text,env){return String(text).replace(/\{([A-Za-z_][\w-]*)\}/g,(_,k)=>env[k]??`{${k}}`);}
 function enabled(condition,env){const c=interpolate(condition,env).trim();if(c.startsWith('!'))return!enabled(c.slice(1),env);const value=Object.prototype.hasOwnProperty.call(env,c)?env[c]:false;return value===true||value==='true'||value===1||value==='1';}
 function joinSelector(parent,child){if(!parent)return child;if(child.includes('&'))return child.replace(/&/g,parent);if(/^[:\[]/.test(child))return`${parent}${child}`;return`${parent} ${child}`;}
-function compile(source,options={}){
-  const ast=parse(source),env={...(options.defines||{})},variables={},rules=[];
-  for(const n of ast.children)if(n.type==='variables')for(const c of n.children){if(c.type!=='property')throw new StylppError('Only name/value declarations are allowed inside variables;',c.line);variables[c.name]=interpolate(c.value,env);env[c.name]=variables[c.name];}
-  function selectorsFor(parents,selector){const children=selector.split(',').map(s=>s.trim());return parents.length?parents.flatMap(p=>children.map(c=>joinSelector(p,c))):children;}
-  function emit(nodes,envNow,parents,wrappers){for(const n of nodes){
-    if(n.type==='variables')continue;
-    if(n.type==='for'){const step=n.start<=n.end?1:-1;for(let i=n.start;step>0?i<=n.end:i>=n.end;i+=step)emit(n.children,{...envNow,[n.name]:i},parents,wrappers);continue;}
-    if(n.type==='if'){if(enabled(n.condition,envNow)){const properties=n.children.filter(c=>c.type==='property');if(properties.length&&parents.length)rules.push({selectors:parents,properties,env:envNow,wrappers,line:n.line});emit(n.children.filter(c=>c.type!=='property'),envNow,parents,wrappers);}continue;}
-    if(n.type==='selector'){const selectors=selectorsFor(parents,interpolate(n.selector,envNow)),properties=n.children.filter(c=>c.type==='property');if(properties.length)rules.push({selectors,properties,env:envNow,wrappers,line:n.line});emit(n.children.filter(c=>c.type!=='property'),envNow,selectors,wrappers);continue;}
-    if(n.type==='atrule'){const properties=n.children.filter(c=>c.type==='property');if(properties.length&&parents.length)rules.push({selectors:parents,properties,env:envNow,wrappers:[...wrappers,interpolate(n.header,envNow)],line:n.line});emit(n.children.filter(c=>c.type!=='property'),envNow,parents,[...wrappers,interpolate(n.header,envNow)]);}
-  }}
-  emit(ast.children,env,[],[]);const out=[];
-  if(Object.keys(variables).length){out.push(':root {');for(const[name,raw]of Object.entries(variables))out.push(`  --${name}: ${valueOf(raw,env)};`);out.push('}');}
-  for(const rule of rules){let block=`${rule.selectors.join(', ')} {\n`+rule.properties.map(p=>`  ${p.name}: ${valueOf(interpolate(p.value,rule.env),rule.env)};`).join('\n')+'\n}';for(let i=rule.wrappers.length-1;i>=0;i--)block=`${rule.wrappers[i]} {\n${block.split('\n').map(line=>`  ${line}`).join('\n')}\n}`;out.push(block);}
-  let css=out.join('\n');if(options.minify)css=minify(css);const result={css};if(options.sourceMap)result.map=JSON.stringify({version:3,file:options.file||'',sources:[options.source||'input.stylpp'],names:[],mappings:''});return result;
-}
+function compile(source,options={}){const ast=parse(source),env={...(options.defines||{})},variables={},rules=[];for(const n of ast.children)if(n.type==='variables')for(const c of n.children){if(c.type!=='property')throw new StylppError('Only name/value declarations are allowed inside variables;',c.line);variables[c.name]=interpolate(c.value,env);env[c.name]=variables[c.name];}
+ function selectorsFor(parents,selector){const children=selector.split(',').map(s=>s.trim());return parents.length?parents.flatMap(p=>children.map(c=>joinSelector(p,c))):children;}
+ function emit(nodes,envNow,parents,wrappers){for(const n of nodes){if(n.type==='variables')continue;if(n.type==='for'){const step=n.start<=n.end?1:-1;for(let i=n.start;step>0?i<=n.end:i>=n.end;i+=step)emit(n.children,{...envNow,[n.name]:i},parents,wrappers);continue;}if(n.type==='if'){if(enabled(n.condition,envNow)){const properties=n.children.filter(c=>c.type==='property');if(properties.length&&parents.length)rules.push({selectors:parents,properties,env:envNow,wrappers,line:n.line});emit(n.children.filter(c=>c.type!=='property'),envNow,parents,wrappers);}continue;}if(n.type==='selector'){const selectors=selectorsFor(parents,interpolate(n.selector,envNow)),properties=n.children.filter(c=>c.type==='property');if(properties.length)rules.push({selectors,properties,env:envNow,wrappers,line:n.line});emit(n.children.filter(c=>c.type!=='property'),envNow,selectors,wrappers);continue;}if(n.type==='atrule'){const properties=n.children.filter(c=>c.type==='property');if(properties.length&&parents.length)rules.push({selectors:parents,properties,env:envNow,wrappers:[...wrappers,interpolate(n.header,envNow)],line:n.line});emit(n.children.filter(c=>c.type!=='property'),envNow,parents,[...wrappers,interpolate(n.header,envNow)]);}}}
+ emit(ast.children,env,[],[]);const out=[];if(Object.keys(variables).length){out.push(':root {');for(const[name,raw]of Object.entries(variables))out.push(`  --${name}: ${valueOf(raw,env)};`);out.push('}');}for(const rule of rules){let block=`${rule.selectors.join(', ')} {\n`+rule.properties.map(p=>`  ${p.name}: ${valueOf(interpolate(p.value,rule.env),rule.env)};`).join('\n')+'\n}';for(let i=rule.wrappers.length-1;i>=0;i--)block=`${rule.wrappers[i]} {\n${block.split('\n').map(line=>`  ${line}`).join('\n')}\n}`;out.push(block);}let css=out.join('\n');if(options.minify)css=minify(css);const result={css};if(options.sourceMap)result.map=JSON.stringify({version:3,file:options.file||'',sources:[options.source||'input.stylpp'],names:[],mappings:''});return result;}
 function minify(css){return css.replace(/\/\*[\s\S]*?\*\//g,'').replace(/\s+/g,' ').replace(/\s*([{}:;,>])\s*/g,'$1').replace(/;}/g,'}').trim();}
 function lint(source){try{parse(source);return{ok:true,errors:[]};}catch(e){return{ok:false,errors:[e.message]};}}
 function format(source){const ast=parse(source),out=[];function walk(nodes,d){for(const n of nodes){const p=' '.repeat(d);if(n.type==='variables'){out.push(`${p}variables;`);walk(n.children,d+4);}else if(n.type==='property')out.push(`${p}${n.name} ${n.value};`);else if(n.type==='selector'){out.push(`${p}${n.selector};`);walk(n.children,d+4);}else if(n.type==='for'){out.push(`${p}for ${n.name} in ${n.start} to ${n.end};`);walk(n.children,d+4);}else if(n.type==='if'){out.push(`${p}if ${n.condition};`);walk(n.children,d+4);}else if(n.type==='atrule'){out.push(`${p}${n.header};`);walk(n.children,d+4);}}}walk(ast.children,0);return out.join('\n')+(out.length?'\n':'');}
