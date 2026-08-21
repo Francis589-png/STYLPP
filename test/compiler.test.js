@@ -6,8 +6,15 @@ test('compiles variables and nested selectors', () => {
   const result = compile(`variables;\n    primary #007bff;\n    spacing 16px;\n.button;\n    color var(primary);\n    padding var(spacing);\n    :hover;\n        color black;\n`);
   assert.match(result.css, /--primary: #007bff/);
   assert.match(result.css, /\.button \{/);
-  assert.match(result.css, /\.button :hover \{/);
+  assert.match(result.css, /\.button:hover \{/);
   assert.match(result.css, /color: var\(--primary\);/);
+});
+
+test('supports nested media queries', () => {
+  const result = compile(`.container;\n    width 100%;\n    @media (min-width: 768px);\n        width 750px;\n`);
+  assert.match(result.css, /@media \(min-width: 768px\)/);
+  assert.match(result.css, /\.container \{/);
+  assert.match(result.css, /width: 750px/);
 });
 
 test('evaluates compatible math and emits calc for mixed units', () => {
