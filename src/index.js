@@ -24,8 +24,10 @@ function parse(source) {
     if(fm){const n={type:'for',name:fm[1],start:Number(fm[2]),end:Number(fm[3]),children:[],line:lineNo};parent.children.push(n);stack.push({indent,node:n});continue;}
     if(text.startsWith('if ')){const n={type:'if',condition:text.slice(3).trim(),children:[],line:lineNo};parent.children.push(n);stack.push({indent,node:n});continue;}
     if(/^@(media|supports|container|layer|keyframes|font-face|page)\b/.test(text)){const n={type:'atrule',header:text,children:[],line:lineNo};parent.children.push(n);stack.push({indent,node:n});continue;}
-    const pm=text.match(/^([-\w]+)\s+(.+)$/), isProperty=pm&&!/^[.#:\[]/.test(text)&&!/^[a-zA-Z_*][\w-]*\s*[.#:\[]/.test(text);
-    if(isProperty) parent.children.push({type:'property',name:pm[1],value:pm[2],line:lineNo}); else {const n={type:'selector',selector:text,children:[],line:lineNo};parent.children.push(n);stack.push({indent,node:n});}
+    const selectorLike=/^[.#:\[]/.test(text)||/^[a-zA-Z_*][\w-]*(?:\.[\w-]+|#[\w-]+|:{1,2}[\w-]+|\[)/.test(text);
+    const pm=text.match(/^([-\w]+)\s+(.+)$/);
+    if(pm && !selectorLike) parent.children.push({type:'property',name:pm[1],value:pm[2],line:lineNo});
+    else {const n={type:'selector',selector:text,children:[],line:lineNo};parent.children.push(n);stack.push({indent,node:n});}
   } return root;
 }
 function parseNumber(value){const m=String(value).trim().match(/^(-?(?:\d+(?:\.\d+)?|\.\d+))([a-zA-Z%]*)$/);return m?{n:Number(m[1]),unit:m[2]}:null;}
