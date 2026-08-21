@@ -1,8 +1,9 @@
 const { Signal, UINode } = require('./ui');
 const { Spring, Body } = require('./physics');
+const { parse, SyntaxError } = require('./syntax');
 
-class RuntimeDslError extends Error {
-  constructor(message, line) { super(line ? `STYL++ runtime line ${line}: ${message}` : message); this.name = 'RuntimeDslError'; this.line = line; }
+class RuntimeDslError extends SyntaxError {
+  constructor(message, line, column = 1) { super(`runtime: ${message}`, line, column); this.name = 'RuntimeDslError'; }
 }
 
 function parseValue(value) {
@@ -14,37 +15,38 @@ function parseValue(value) {
   return v.replace(/^['"]|['"]$/g, '');
 }
 
+const nodeTypes = new Set(['app','view','button','text','input','image','row','column','stack','grid','scroll','overlay','card']);
 function compileRuntime(source, { root = new UINode('root') } = {}) {
-  const lines = String(source).replace(/\r\n?/g, '\n').split('\n');
-  const stack = [{ indent: -1, node: root, kind: 'root' }];
-  const signals = new Map(); const springs = []; const bodies = []; const handlers = [];
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i].replace(/\/\/.*$/, ''); if (!raw.trim()) continue;
-    const indent = raw.replace(/\t/g, '    ').length - raw.trimStart().length;
-    while (stack.length > 1 && indent <= stack.at(-1).indent) stack.pop();
-    const text = raw.trim(); if (!text.endsWith(';')) throw new RuntimeDslError('Runtime declarations must end with ;', i + 1);
-    const statement = text.slice(0, -1).trim(); const parent = stack.at(-1);
-    const parts = statement.split(/\s+/); const keyword = parts[0];
-    if (['app','view','button','text','input','image','row','column','stack','grid','scroll','overlay','card'].includes(keyword)) {
-      const node = new UINode(keyword); parent.node.append(node); stack.push({ indent, node, kind: 'node' }); continue;
+  const signals = new Map(), springs = [], bodies = [], handlers = [];
+  const ast = parse(source, token => {
+    const [keyword, ...args] = token.tokens;
+    if (nodeTypes.has(keyword)) return { type: 'node', keyword, block: true, line: token.line, parentNode: true };
+    if (keyword === 'id') return { type: 'id', value: args.join(' '), line: token.line };
+    if (keyword === 'state') { if (args.length < 2) throw new RuntimeDslError('state requires a name and value', token.line, token.indent + 1); signals.set(args[0], new Signal(parseValue(args.slice(1).join(' ')))); return { type: 'state', line: token.line }; }
+    if (keyword === 'spring') { const spring = new Spring(); springs.push(spring); return { type: 'spring', spring, block: true, line: token.line }; }
+    if (keyword === 'physics') { const body = new Body(); bodies.push(body); return { type: 'physics', body, block: true, line: token.line }; }
+    if (keyword === 'on') { if (!args[0]) throw new RuntimeDslError('on requires an event name', token.line, token.indent + 1); handlers.push({ event: args[0], body: args.slice(1).join(' '), line: token.line }); return { type: 'on', line: token.line }; }
+    if (['stiffness','damping','mass','velocity','target','value','gravity','width','height','gap','padding','layout'].includes(keyword)) return { type: 'property', keyword, args, line: token.line };
+    throw new RuntimeDslError(`unknown runtime declaration: ${keyword}`, token.line, token.indent + 1);
+  });
+
+  function build(nodes, parent, context = { kind: 'node', target: parent }) {
+    for (const n of nodes) {
+      if (n.type === 'node') { const child = new UINode(n.keyword); parent.append(child); build(n.children, child, { kind: 'node', target: child }); }
+      else if (n.type === 'id') parent.attr('id', n.value);
+      else if (n.type === 'spring') { const spring = n.spring; buildProperties(n.children, spring, { kind: 'spring', target: spring }); }
+      else if (n.type === 'physics') { const body = n.body; buildProperties(n.children, body, { kind: 'physics', target: body }); }
+      else if (n.type === 'property') applyProperty(n, context);
+      else if (n.type === 'on') handlers.find(h => h.line === n.line).node = parent;
     }
-    if (keyword === 'id') { parent.node.attr('id', parts.slice(1).join(' ')); continue; }
-    if (keyword === 'state') {
-      if (parts.length < 3) throw new RuntimeDslError('state requires a name and value', i + 1);
-      const name = parts[1], value = parseValue(parts.slice(2).join(' ')); signals.set(name, new Signal(value)); continue;
-    }
-    if (keyword === 'spring') { const spring = new Spring(); springs.push(spring); stack.push({ indent, node: parent.node, kind: 'spring', spring }); continue; }
-    if (keyword === 'physics') { const body = new Body(); bodies.push(body); stack.push({ indent, node: parent.node, kind: 'physics', body }); continue; }
-    if (keyword === 'on') {
-      if (parts.length < 2) throw new RuntimeDslError('on requires an event name', i + 1);
-      const event = parts[1], body = parts.slice(2).join(' '); handlers.push({ node: parent.node, event, body, line: i + 1 }); continue;
-    }
-    const target = parent.kind === 'spring' ? parent.spring : parent.kind === 'physics' ? parent.body : parent.node;
-    if (keyword === 'stiffness' || keyword === 'damping' || keyword === 'mass' || keyword === 'velocity' || keyword === 'target' || keyword === 'value') { target[keyword] = parseValue(parts.slice(1).join(' ')); continue; }
-    if (keyword === 'gravity') { const x = parseValue(parts[1] || '0'), y = parseValue(parts[2] || '0'); target.gravity = { x, y }; continue; }
-    if (keyword === 'width' || keyword === 'height' || keyword === 'gap' || keyword === 'padding' || keyword === 'layout') { parent.node.attr(keyword, parseValue(parts.slice(1).join(' '))); continue; }
-    throw new RuntimeDslError(`Unknown runtime declaration: ${keyword}`, i + 1);
   }
+  function buildProperties(nodes, target, ctx) { for (const n of nodes) { if (n.type === 'property') applyProperty(n, ctx); else if (n.type === 'on') handlers.find(h => h.line === n.line).node = target; } }
+  function applyProperty(n, ctx) {
+    const value = parseValue(n.args.join(' '));
+    if (n.keyword === 'gravity') { ctx.target.gravity = { x: parseValue(n.args[0] || '0'), y: parseValue(n.args[1] || '0') }; return; }
+    if (ctx.kind === 'node') ctx.target.attr(n.keyword, value); else ctx.target[n.keyword] = value;
+  }
+  build(ast.children, root);
   return { root, signals, springs, bodies, handlers };
 }
 
