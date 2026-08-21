@@ -1,0 +1,20 @@
+variables;
+    primary #007bff;
+    spacing 16px;
+
+body;
+    font-family system-ui, sans-serif;
+    margin 0;
+
+.container;
+    max-width 1200px;
+    margin 0 auto;
+    padding var(spacing);
+
+.button;
+    background var(primary);
+    color white;
+    padding var(spacing) / 2;
+    transition background 0.2s;
+    :hover;
+        background #0056b3;
