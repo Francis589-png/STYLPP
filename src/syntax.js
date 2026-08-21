@@ -25,7 +25,11 @@ function parse(source, classify) {
     const node = classify(token, parent);
     if (!node) throw new SyntaxError(`unknown statement: ${token.text}`, token.line, token.indent + 1);
     parent.children.push(node);
-    if (node.block) { delete node.block; stack.push({ indent: token.indent, node }); }
+    if (node.block) {
+      delete node.block;
+      if (!Array.isArray(node.children)) node.children = [];
+      stack.push({ indent: token.indent, node });
+    }
   }
   return root;
 }
