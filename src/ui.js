@@ -24,7 +24,14 @@ function walk(root, visitor) { visitor(root); for (const child of root.children)
 function find(root, id) { return root.findById ? root.findById(id) : (() => { let result; walk(root, n => { if (n.props.id === id) result = n; }); return result; })(); }
 function layout(root, width, height) {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width < 0 || height < 0) throw new UIError('layout dimensions must be non-negative finite numbers');
-  function measure(n, x, y, w, h) { const p = n.props; const widthValue = Number.isFinite(p.width) ? p.width : w; const heightValue = Number.isFinite(p.height) ? p.height : h; n.layout = { x, y, width: Math.max(0, widthValue), height: Math.max(0, heightValue) }; if (!n.children.length) return; const gap = Number.isFinite(p.gap) ? p.gap : 0; if (n.type === 'row') { const childW = Math.max(0, (n.layout.width - gap * (n.children.length - 1)) / n.children.length); n.children.forEach((c, i) => measure(c, x + i * (childW + gap), y, childW, n.layout.height)); } else if (n.type === 'stack' || n.type === 'overlay') n.children.forEach(c => measure(c, x, y, n.layout.width, n.layout.height)); else { const childH = Math.max(0, (n.layout.height - gap * (n.children.length - 1)) / n.children.length); n.children.forEach((c, i) => measure(c, x, y + i * (childH + gap), n.layout.width, childH)); } }
+  function measure(n, x, y, w, h) {
+    const p = n.props; const widthValue = Number.isFinite(p.width) ? p.width : w; const heightValue = Number.isFinite(p.height) ? p.height : h;
+    n.layout = { x, y, width: Math.max(0, widthValue), height: Math.max(0, heightValue) }; if (!n.children.length) return;
+    const gap = Number.isFinite(p.gap) ? p.gap : 0; const direction = p.layout || p.direction || (n.type === 'row' ? 'row' : 'column');
+    if (direction === 'row') { const childW = Math.max(0, (n.layout.width - gap * (n.children.length - 1)) / n.children.length); n.children.forEach((c, i) => measure(c, x + i * (childW + gap), y, childW, n.layout.height)); }
+    else if (direction === 'stack' || direction === 'overlay' || n.type === 'stack' || n.type === 'overlay') n.children.forEach(c => measure(c, x, y, n.layout.width, n.layout.height));
+    else { const childH = Math.max(0, (n.layout.height - gap * (n.children.length - 1)) / n.children.length); n.children.forEach((c, i) => measure(c, x, y + i * (childH + gap), n.layout.width, childH)); }
+  }
   measure(root, 0, 0, width, height); return root;
 }
 
