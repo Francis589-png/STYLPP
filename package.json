@@ -1,12 +1,12 @@
 {
   "name": "stylpp",
-  "version": "0.1.0",
-  "description": "A real CSS preprocessor with variables, nesting, expressions, loops, conditionals, media queries, linting and watch mode.",
+  "version": "0.2.0",
+  "description": "A real CSS preprocessor with a physics and spring runtime for natural motion and interactive interfaces.",
   "type": "commonjs",
   "main": "src/index.js",
   "bin": { "stylpp": "bin/stylpp.js" },
   "scripts": { "test": "node --test", "compile": "node bin/stylpp.js compile examples/minimal.stylpp dist/styles.css", "lint": "node bin/stylpp.js lint examples/*.stylpp" },
-  "keywords": ["css", "preprocessor", "styling", "language", "compiler"],
+  "keywords": ["css", "preprocessor", "styling", "language", "compiler", "physics", "spring", "animation", "motion"],
   "license": "MIT",
   "engines": { "node": ">=18" }
 }
