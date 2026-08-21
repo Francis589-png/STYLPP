@@ -1,4 +1,4 @@
-const { Signal, UINode } = require('./ui');
+const { Signal, UINode } = require('./runtime');
 const { Spring, Body } = require('./physics');
 const { parse, SyntaxError } = require('./syntax');
 
@@ -20,7 +20,7 @@ function compileRuntime(source, { root = new UINode('root') } = {}) {
   const signals = new Map(), springs = [], bodies = [], handlers = [];
   const ast = parse(source, token => {
     const [keyword, ...args] = token.tokens;
-    if (nodeTypes.has(keyword)) return { type: 'node', keyword, block: true, line: token.line, parentNode: true };
+    if (nodeTypes.has(keyword)) return { type: 'node', keyword, block: true, line: token.line };
     if (keyword === 'id') return { type: 'id', value: args.join(' '), line: token.line };
     if (keyword === 'state') { if (args.length < 2) throw new RuntimeDslError('state requires a name and value', token.line, token.indent + 1); signals.set(args[0], new Signal(parseValue(args.slice(1).join(' ')))); return { type: 'state', line: token.line }; }
     if (keyword === 'spring') { const spring = new Spring(); springs.push(spring); return { type: 'spring', spring, block: true, line: token.line }; }
@@ -34,13 +34,14 @@ function compileRuntime(source, { root = new UINode('root') } = {}) {
     for (const n of nodes) {
       if (n.type === 'node') { const child = new UINode(n.keyword); parent.append(child); build(n.children, child, { kind: 'node', target: child }); }
       else if (n.type === 'id') parent.attr('id', n.value);
-      else if (n.type === 'spring') { const spring = n.spring; buildProperties(n.children, spring, { kind: 'spring', target: spring }); }
-      else if (n.type === 'physics') { const body = n.body; buildProperties(n.children, body, { kind: 'physics', target: body }); }
+      else if (n.type === 'state') continue;
+      else if (n.type === 'spring') buildProperties(n.children, n.spring, { kind: 'spring', target: n.spring });
+      else if (n.type === 'physics') buildProperties(n.children, n.body, { kind: 'physics', target: n.body });
       else if (n.type === 'property') applyProperty(n, context);
-      else if (n.type === 'on') handlers.find(h => h.line === n.line).node = parent;
+      else if (n.type === 'on') { const handler = handlers.find(h => h.line === n.line); if (handler) handler.node = parent; }
     }
   }
-  function buildProperties(nodes, target, ctx) { for (const n of nodes) { if (n.type === 'property') applyProperty(n, ctx); else if (n.type === 'on') handlers.find(h => h.line === n.line).node = target; } }
+  function buildProperties(nodes, target, ctx) { for (const n of nodes) { if (n.type === 'property') applyProperty(n, ctx); else if (n.type === 'on') { const handler = handlers.find(h => h.line === n.line); if (handler) handler.node = target; } } }
   function applyProperty(n, ctx) {
     const value = parseValue(n.args.join(' '));
     if (n.keyword === 'gravity') { ctx.target.gravity = { x: parseValue(n.args[0] || '0'), y: parseValue(n.args[1] || '0') }; return; }
