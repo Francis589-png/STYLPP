@@ -31,9 +31,16 @@ function parse(source) {
   } return root;
 }
 function parseNumber(value){const m=String(value).trim().match(/^(-?(?:\d+(?:\.\d+)?|\.\d+))([a-zA-Z%]*)$/);return m?{n:Number(m[1]),unit:m[2]}:null;}
-function valueOf(value,env){let v=String(value).replace(/\b([A-Za-z_][\w-]*)\b/g,n=>Object.prototype.hasOwnProperty.call(env,n)?env[n]:n).replace(/var\(\s*([A-Za-z_][\w-]*)\s*\)/g,(_,n)=>`var(--${n})`);const parts=v.match(/^(.+?)\s*([+*/-])\s*(.+)$/);if(!parts)return v;const[,left,op,right]=parts,a=parseNumber(left),b=parseNumber(right);if(!a||!b)return`calc(${left.trim()} ${op} ${right.trim()})`;if(op==='+')return a.unit===b.unit?`${a.n+b.n}${a.unit}`:`calc(${left.trim()} + ${right.trim()})`;if(op==='-')return a.unit===b.unit?`${a.n-b.n}${a.unit}`:`calc(${left.trim()} - ${right.trim()})`;if(op==='*'){if(a.unit&&b.unit)return`calc(${left.trim()} * ${right.trim()})`;return`${a.n*b.n}${a.unit||b.unit}`;}if(b.n===0)throw new StylppError('Division by zero');return b.unit?`calc(${left.trim()} / ${right.trim()})`:`${a.n/b.n}${a.unit}`;}
+function valueOf(value,env){
+  let v=String(value);
+  const variables=[];
+  v=v.replace(/var\(\s*([A-Za-z_][\w-]*)\s*\)/g,(_,name)=>{const key=`__STYL_VAR_${variables.length}__`;variables.push(`var(--${name})`);return key;});
+  v=v.replace(/\b([A-Za-z_][\w-]*)\b/g,n=>Object.prototype.hasOwnProperty.call(env,n)?env[n]:n);
+  variables.forEach((replacement,index)=>{v=v.replace(`__STYL_VAR_${index}__`,replacement);});
+  const parts=v.match(/^(.+?)\s*([+*/-])\s*(.+)$/);if(!parts)return v;const[,left,op,right]=parts,a=parseNumber(left),b=parseNumber(right);if(!a||!b)return`calc(${left.trim()} ${op} ${right.trim()})`;if(op==='+')return a.unit===b.unit?`${a.n+b.n}${a.unit}`:`calc(${left.trim()} + ${right.trim()})`;if(op==='-')return a.unit===b.unit?`${a.n-b.n}${a.unit}`:`calc(${left.trim()} - ${right.trim()})`;if(op==='*'){if(a.unit&&b.unit)return`calc(${left.trim()} * ${right.trim()})`;return`${a.n*b.n}${a.unit||b.unit}`;}if(b.n===0)throw new StylppError('Division by zero');return b.unit?`calc(${left.trim()} / ${right.trim()})`:`${a.n/b.n}${a.unit}`;
+}
 function interpolate(text,env){return String(text).replace(/\{([A-Za-z_][\w-]*)\}/g,(_,k)=>env[k]??`{${k}}`);}
-function enabled(condition,env){const c=interpolate(condition,env).trim();if(c.startsWith('!'))return!enabled(c.slice(1),env);return env[c]===true||env[c]==='true'||env[c]===1||env[c]==='1';}
+function enabled(condition,env){const c=interpolate(condition,env).trim();if(c.startsWith('!'))return!enabled(c.slice(1),env);const value=Object.prototype.hasOwnProperty.call(env,c)?env[c]:false;return value===true||value==='true'||value===1||value==='1';}
 function joinSelector(parent,child){if(!parent)return child;if(child.includes('&'))return child.replace(/&/g,parent);if(/^[:\[]/.test(child))return`${parent}${child}`;return`${parent} ${child}`;}
 function compile(source,options={}){const ast=parse(source),env={...(options.defines||{})},variables={},rules=[];for(const n of ast.children)if(n.type==='variables')for(const c of n.children){if(c.type!=='property')throw new StylppError('Only name/value declarations are allowed inside variables;',c.line);variables[c.name]=interpolate(c.value,env);env[c.name]=variables[c.name];}
  function selectorsFor(parents,selector){const children=selector.split(',').map(s=>s.trim());return parents.length?parents.flatMap(p=>children.map(c=>joinSelector(p,c))):children;}
