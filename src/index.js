@@ -32,18 +32,25 @@ function parse(source) {
 }
 function parseNumber(value){const m=String(value).trim().match(/^(-?(?:\d+(?:\.\d+)?|\.\d+))([a-zA-Z%]*)$/);return m?{n:Number(m[1]),unit:m[2]}:null;}
 function valueOf(value,env){
-  let v=String(value); const variables=[];
-  v=v.replace(/var\(\s*([A-Za-z_][\w-]*)\s*\)/g,(_,name)=>{const key=`__STYL_VAR_${variables.length}__`;variables.push(`var(--${name})`);return key;});
+  let v=String(value);
+  const protectedVariables=[];
+  v=v.replace(/var\(\s*([A-Za-z_][\w-]*)\s*\)/g,(_,name)=>{
+    const token=`__STYLPROTECTED${protectedVariables.length}__`;
+    protectedVariables.push(`var(--${name})`);
+    return token;
+  });
   v=v.replace(/\b([A-Za-z_][\w-]*)\b/g,n=>Object.prototype.hasOwnProperty.call(env,n)?env[n]:n);
-  variables.forEach((replacement,index)=>{v=v.replaceAll(`__STYL_VAR_${index}__`,replacement);});
-  const trimmed=v.trim();
-  if(/^var\(--[A-Za-z_][\w-]*\)$/.test(trimmed)) return trimmed;
-  const parts=v.match(/^(.+?)\s+([+*/-])\s+(.+)$/); if(!parts)return v;
-  const[,left,op,right]=parts,a=parseNumber(left),b=parseNumber(right); if(!a||!b)return`calc(${left.trim()} ${op} ${right.trim()})`;
-  if(op==='+')return a.unit===b.unit?`${a.n+b.n}${a.unit}`:`calc(${left.trim()} + ${right.trim()})`;
-  if(op==='-')return a.unit===b.unit?`${a.n-b.n}${a.unit}`:`calc(${left.trim()} - ${right.trim()})`;
-  if(op==='*'){if(a.unit&&b.unit)return`calc(${left.trim()} * ${right.trim()})`;return`${a.n*b.n}${a.unit||b.unit}`;}
-  if(b.n===0)throw new StylppError('Division by zero');return b.unit?`calc(${left.trim()} / ${right.trim()})`:`${a.n/b.n}${a.unit}`;
+  const parts=v.match(/^(.+?)\s+([+*/-])\s+(.+)$/);
+  if(parts){
+    const[,left,op,right]=parts,a=parseNumber(left),b=parseNumber(right);
+    if(!a||!b) v=`calc(${left.trim()} ${op} ${right.trim()})`;
+    else if(op==='+') v=a.unit===b.unit?`${a.n+b.n}${a.unit}`:`calc(${left.trim()} + ${right.trim()})`;
+    else if(op==='-') v=a.unit===b.unit?`${a.n-b.n}${a.unit}`:`calc(${left.trim()} - ${right.trim()})`;
+    else if(op==='*') v=a.unit&&b.unit?`calc(${left.trim()} * ${right.trim()})`:`${a.n*b.n}${a.unit||b.unit}`;
+    else { if(b.n===0) throw new StylppError('Division by zero'); v=b.unit?`calc(${left.trim()} / ${right.trim()})`:`${a.n/b.n}${a.unit}`; }
+  }
+  protectedVariables.forEach((replacement,index)=>{v=v.replaceAll(`__STYLPROTECTED${index}__`,replacement);});
+  return v;
 }
 function interpolate(text,env){return String(text).replace(/\{([A-Za-z_][\w-]*)\}/g,(_,k)=>env[k]??`{${k}}`);}
 function enabled(condition,env){const c=interpolate(condition,env).trim();if(c.startsWith('!'))return!enabled(c.slice(1),env);const value=Object.prototype.hasOwnProperty.call(env,c)?env[c]:false;return value===true||value==='true'||value===1||value==='1';}
