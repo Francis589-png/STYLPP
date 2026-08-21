@@ -36,7 +36,8 @@ function valueOf(value,env){
   v=v.replace(/var\(\s*([A-Za-z_][\w-]*)\s*\)/g,(_,name)=>{const key=`__STYL_VAR_${variables.length}__`;variables.push(`var(--${name})`);return key;});
   v=v.replace(/\b([A-Za-z_][\w-]*)\b/g,n=>Object.prototype.hasOwnProperty.call(env,n)?env[n]:n);
   variables.forEach((replacement,index)=>{v=v.replaceAll(`__STYL_VAR_${index}__`,replacement);});
-  const trimmed=v.trim(); if(/^var\(--[A-Za-z_][\w-]*\)$/.test(trimmed)) return trimmed;
+  const trimmed=v.trim();
+  if(/^var\(--[A-Za-z_][\w-]*\)$/.test(trimmed)) return trimmed;
   const parts=v.match(/^(.+?)\s+([+*/-])\s+(.+)$/); if(!parts)return v;
   const[,left,op,right]=parts,a=parseNumber(left),b=parseNumber(right); if(!a||!b)return`calc(${left.trim()} ${op} ${right.trim()})`;
   if(op==='+')return a.unit===b.unit?`${a.n+b.n}${a.unit}`:`calc(${left.trim()} + ${right.trim()})`;
