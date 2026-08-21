@@ -4,6 +4,7 @@ const physics = require('./physics');
 const motion = require('./motion');
 const ui = require('./ui');
 const engine = require('./engine');
+const stylRuntime = require('./styl-runtime');
 
 class StylppError extends Error {
   constructor(message, line) { super(line ? `STYL++ line ${line}: ${message}` : message); this.name = 'StylppError'; this.line = line; }
@@ -39,4 +40,4 @@ function minify(css){return css.replace(/\/\*[\s\S]*?\*\//g,'').replace(/\s+/g,'
 function lint(source){try{parse(source);return{ok:true,errors:[]};}catch(e){return{ok:false,errors:[e.message]};}}
 function format(source){const ast=parse(source),out=[];function walk(nodes,d){for(const n of nodes){const p=' '.repeat(d);if(n.type==='variables'){out.push(`${p}variables;`);walk(n.children,d+4);}else if(n.type==='property')out.push(`${p}${n.name} ${n.value};`);else if(n.type==='selector'){out.push(`${p}${n.selector};`);walk(n.children,d+4);}else if(n.type==='for'){out.push(`${p}for ${n.name} in ${n.start} to ${n.end};`);walk(n.children,d+4);}else if(n.type==='if'){out.push(`${p}if ${n.condition};`);walk(n.children,d+4);}else if(n.type==='atrule'){out.push(`${p}${n.header};`);walk(n.children,d+4);}}}walk(ast.children,0);return out.join('\n')+(out.length?'\n':'');}
 function compileFile(input,output,options={}){const source=fs.readFileSync(input,'utf8'),result=compile(source,{...options,source:path.basename(input),file:path.basename(output)});fs.mkdirSync(path.dirname(path.resolve(output)),{recursive:true});fs.writeFileSync(output,result.css+(result.css.endsWith('\n')?'':'\n'));if(result.map)fs.writeFileSync(`${output}.map`,result.map);return result;}
-module.exports={StylppError,parse,compile,compileFile,lint,format,minify,...physics,...motion,...ui,...engine};
+module.exports={StylppError,parse,compile,compileFile,lint,format,minify,...physics,...motion,...ui,...engine,...stylRuntime};
