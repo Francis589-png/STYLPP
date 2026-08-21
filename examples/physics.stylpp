@@ -1,0 +1,13 @@
+// STYL++ can describe motion-friendly UI systems alongside styling.
+variables;
+    card-width 320px;
+    motion-duration 240ms;
+
+.card;
+    width card-width;
+    transition transform motion-duration;
+    transform-origin center;
+
+.card;
+    :hover;
+        transform scale(1.03);
