@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { Spring, Body, PhysicsWorld } = require('../src/physics');
+const { PhysicsError, Spring, Body, PhysicsWorld } = require('../src/physics');
 
 test('spring moves toward its target', () => {
   const s = new Spring({ value: 0, target: 100, stiffness: 180, damping: 24 });
@@ -16,11 +16,23 @@ test('spring preserves physical state and can retarget', () => {
   assert.ok(Number.isFinite(s.velocity));
 });
 
+test('spring rejects invalid timestep and epsilon', () => {
+  const s = new Spring();
+  assert.throws(() => s.step(0), PhysicsError);
+  assert.throws(() => s.step(0.101), PhysicsError);
+  assert.throws(() => s.settle(-1), PhysicsError);
+});
+
 test('body integrates gravity and force', () => {
   const body = new Body({ x: 0, y: 0, gravity: { x: 0, y: 10 }, damping: 0 });
   body.applyForce(10, 0).step(0.1);
   assert.ok(body.position.x > 0);
   assert.ok(body.position.y > 0);
+});
+
+test('body rejects invalid timestep and damping', () => {
+  assert.throws(() => new Body({ damping: -1 }), PhysicsError);
+  assert.throws(() => new Body().step(0), PhysicsError);
 });
 
 test('world uses a fixed timestep', () => {
@@ -29,4 +41,15 @@ test('world uses a fixed timestep', () => {
   const steps = world.step(1 / 30);
   assert.equal(steps, 2);
   assert.ok(body.position.y > 0);
+});
+
+test('world validates configuration and can remove bodies', () => {
+  assert.throws(() => new PhysicsWorld({ fixedDt: 0 }), PhysicsError);
+  assert.throws(() => new PhysicsWorld({ maxSubSteps: 0 }), PhysicsError);
+  const world = new PhysicsWorld();
+  const body = world.add(new Body());
+  assert.equal(world.bodies.length, 1);
+  world.remove(body);
+  assert.equal(world.bodies.length, 0);
+  assert.throws(() => world.add({}), PhysicsError);
 });
